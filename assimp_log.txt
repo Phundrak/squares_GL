@@ -1,0 +1,18 @@
+Info,  T0: Load models/ALYS_ShapeChange.obj
+Info,  T0: Found a matching importer for this file format: Wavefront Object Importer.
+Info,  T0: Import root directory is 'models/'
+Info,  T0: Entering post processing pipeline
+Info,  T0: RemoveRedundantMatsProcess finished. Removed 24 redundant and 1 unused materials.
+Warn,  T0: Found 12 degenerated primitives
+Warn,  T0: Found 4 degenerated primitives
+Info,  T0: Points: 1, Lines: 2, Triangles: 30, Polygons: 0 (Meshes, X = removed)
+Error, T0: FindInvalidDataProcess fails on mesh positions: All vectors are identical
+Error, T0: Deleting mesh: Unable to continue without vertex positions
+Info,  T0: FindInvalidDataProcess finished. Found issues ...
+Info,  T0: OptimizeMeshesProcess finished. Input meshes: 32, Output meshes: 7
+Info,  T0: Tangents are undefined for line and point meshes
+Info,  T0: CalcTangentsProcess finished. Tangents have been calculated
+Info,  T0: JoinVerticesProcess finished | Verts in: 75019 out: 21641 | ~71.2%
+Error, T0: This algorithm works on triangle meshes only
+Info,  T0: Cache relevant are 6 meshes (24997 faces). Average output ACMR is 1.028443
+Info,  T0: Leaving post processing pipeline
