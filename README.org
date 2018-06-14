@@ -1,0 +1,14 @@
+* SQUARES GL
+
+Squares GL is a university assignment for which I have to create an animation using the [[https://github.com/noalien/GL4Dummies][GL4Dummies]] library. It can be either a 2D or a 3D animation.
+
+For the complete set of rules, please refer to the rules of [[http://www.api8.fr/][API8]] (in French).
+
+Dependencies:
+- [[https://github.com/noalien/GL4Dummies][GL4Dummies]]
+- SDL2 (~SDL_image.h~ and ~SDL_mixer.h~ in particular)
+- fftw3
+
+Tested under GNU/Linux with clang 6.0.
+
+Spoiler: I have no idea what I am doing.
