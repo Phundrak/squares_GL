@@ -33,6 +33,7 @@ static void mixCallback(void *udata, Uint8 *stream, int len);
 /* general functions *********************************************************/
 static void init(const char *filename);
 static void resize(int w, int h);
+static void loadTexture(GLuint id, const char *filename);
 static void draw(void);
 static void quit(void);
 
@@ -41,7 +42,7 @@ static void quit(void);
 /*****************************************************************************/
 
 /* textures ******************************************************************/
-static GLuint _tex;
+static GLuint _tId; /* texture pour les carrés */
 
 /* OpenGL and GL4D ***********************************************************/
 static int _wW = 800, _wH = 600;
@@ -86,22 +87,21 @@ int main(int argc, char **argv) {
 
 /* init de OpenGL */
 static void init(const char *filename) {
-  /* textures ****************************************************************/
-  glGenTextures(1, &_tex);
-  glBindTexture(GL_TEXTURE_2D, _tex);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-  glGenerateMipmap(GL_TEXTURE_2D);
-
   /* shaders *****************************************************************/
   glEnable(GL_DEPTH_TEST);
   glClearColor(0.0824f, 0.0824f, 0.0824f, 0.0f);
-  _pId = gl4duCreateProgram("<vs>shaders/main.vs", "<fs>shaders/main.fs", NULL);
+  _pId = gl4duCreateProgram("<vs>shaders/model.vs", "<fs>shaders/squares.fs", NULL);
   _pId2 =
       gl4duCreateProgram("<vs>shaders/model.vs", "<fs>shaders/model.fs", NULL);
   gl4duGenMatrix(GL_FLOAT, "modelViewMatrix");
   gl4duGenMatrix(GL_FLOAT, "projectionMatrix");
+  glEnable(GL_CULL_FACE);
+  glCullFace(GL_BACK);
   resize(_wW, _wH);
+
+  /* textures ****************************************************************/
+  glGenTextures(1, &_tId);
+  loadTexture(_tId, "images/square.jpg");
 
   /* objets 3D ***************************************************************/
   _cube2 = gl4dgGenCubef();
@@ -119,6 +119,27 @@ static void init(const char *filename) {
                                 FFTW_ESTIMATE);
   assert(_plan4fftw);
   initAudio(filename);
+}
+
+static void loadTexture(GLuint id, const char *filename) {
+  SDL_Surface *t;
+  glBindTexture(GL_TEXTURE_2D, id);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+  if ((t = IMG_Load(filename)) != NULL) {
+#ifdef __APPLE__
+    int mode = t->format->BytesPerPixel == 4 ? GL_BGRA : GL_BGR;
+#else
+    int mode = t->format->BytesPerPixel == 4 ? GL_RGBA : GL_RGB;
+#endif
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, t->w, t->h, 0, mode,
+                 GL_UNSIGNED_BYTE, t->pixels);
+    SDL_FreeSurface(t);
+  } else {
+    fprintf(stderr, "can't open file %s : %s\n", filename, SDL_GetError());
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE,
+                 NULL);
+  }
 }
 
 static void initAudio(const char *filename) {
@@ -178,14 +199,7 @@ static void draw(void) {
   static Sint16 basses = 0, high = 0, volume = 0;
   const float shift_coef = 0.02f;
   GLfloat lum[4] = {0.0, 0.0, 5.0, 1.0};
-  GLfloat rouge[] = {1, 0, 0, 1}, vert[] = {0, 1, 0, 1}, bleu[] = {0, 0, 1, 1},
-          jaune[] = {1, 1, 0, 1};
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-  glDisable(GL_CULL_FACE);
-  glEnable(GL_DEPTH_TEST);
-  glDisable(GL_BLEND);
-  gl4duBindMatrix("modelViewMatrix");
-  gl4duLoadIdentityf();
 
   /***************************************************************************/
   /*                              analyse audio                              */
@@ -221,6 +235,14 @@ static void draw(void) {
 
   /* squares *****************************************************************/
   glUseProgram(_pId);
+  glActiveTexture(GL_TEXTURE0);
+  glBindTexture(GL_TEXTURE_2D, _tId);
+  glDisable(GL_BLEND);
+  glUniform1i(glGetUniformLocation(_pId, "tex"), 0);
+  glUniform1f(glGetUniformLocation(_pId, "basses"), basses);
+
+  gl4duBindMatrix("modelViewMatrix");
+  gl4duLoadIdentityf();
 
   gl4duTranslatef(0, -5, -20);
   gl4duRotatef(sin(rot_camera * 0.01) * 40, 0, -1, -0.25);
@@ -234,7 +256,6 @@ static void draw(void) {
     gl4duSendMatrices();
   }
   gl4duPopMatrix();
-  /* glUniform4fv(glGetUniformLocation(_pId, "couleur"), 1, vert); */
   gl4dgDraw(_cube1);
 
   gl4duPushMatrix();
@@ -245,7 +266,6 @@ static void draw(void) {
     gl4duSendMatrices();
   }
   gl4duPopMatrix();
-  /* glUniform4fv(glGetUniformLocation(_pId, "couleur"), 1, rouge); */
   gl4dgDraw(_cube2);
 
   gl4duPushMatrix();
@@ -257,7 +277,6 @@ static void draw(void) {
     gl4duSendMatrices();
   }
   gl4duPopMatrix();
-  /* glUniform4fv(glGetUniformLocation(_pId, "couleur"), 1, jaune); */
   gl4dgDraw(_cube3);
 
   gl4duPushMatrix();
@@ -269,7 +288,6 @@ static void draw(void) {
     gl4duSendMatrices();
   }
   gl4duPopMatrix();
-  /* glUniform4fv(glGetUniformLocation(_pId, "couleur"), 1, bleu); */
   gl4dgDraw(_cube);
 
   gl4duTranslatef(-0.7f, -20, -8);
@@ -284,14 +302,16 @@ static void draw(void) {
   /* ALYS ********************************************************************/
 
   glUseProgram(_pId2);
+  glEnable(GL_BLEND);
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
   glUniform4fv(glGetUniformLocation(_pId2, "lumpos"), 1, lum);
   glEnable(GL_CULL_FACE);
   assimpDrawScene();
   gl4duSendMatrices();
 
 
-  xz += 2;
-  y += 0.4;
+  /* xz += 2; */
+  /* y += 0.4; */
   ++rot_camera;
   mod_shift += 0.07;
 }
