@@ -1,6 +1,7 @@
 #version 330
 
 uniform sampler2D tex;
+uniform float basses;
 in vec2 vsoTexCoord;
 in vec3 vsoNormal;
 in vec4 vsoModPosition;

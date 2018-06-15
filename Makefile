@@ -15,7 +15,7 @@ CP = rsync -R
 # déclaration des options du compilateur
 CFLAGS = -Wall -O3
 CPPFLAGS = -I.
-LDFLAGS = -lm -lassimp -lSDL2_image -lSDL2_mixer -lfftw3 -lglfw
+LDFLAGS = -lm -lassimp -lSDL2_image -lSDL2_mixer -lSDL2_ttf -lfftw3 -lglfw
 
 # définition des fichiers et dossiers
 PROGNAME = ALYS_squares

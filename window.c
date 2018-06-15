@@ -1,9 +1,11 @@
 #include <GL4D/gl4df.h>
+#include <GL4D/gl4dp.h>
 #include <GL4D/gl4du.h>
 #include <GL4D/gl4duw_SDL2.h>
 #include <GLFW/glfw3.h>
 #include <SDL_image.h>
 #include <SDL_mixer.h>
+#include <SDL_ttf.h>
 #include <assert.h>
 #include <fftw3.h>
 #include <math.h>
@@ -16,6 +18,7 @@
 #define ECHANTILLONS 1024
 #define LIMIT_BASS 10
 #define LIMIT_HIGH 500
+#define END_CREDITS 14700.0
 
 /*****************************************************************************/
 /*                                 functions                                 */
@@ -31,9 +34,10 @@ static void initAudio(const char *filename);
 static void mixCallback(void *udata, Uint8 *stream, int len);
 
 /* general functions *********************************************************/
-static void init(const char *filename);
+static void init(void);
 static void resize(int w, int h);
 static void loadTexture(GLuint id, const char *filename);
+static void initText(GLuint *ptId, const char *text);
 static void draw(void);
 static void quit(void);
 
@@ -42,13 +46,13 @@ static void quit(void);
 /*****************************************************************************/
 
 /* textures ******************************************************************/
-static GLuint _tId; /* texture pour les carrés */
+static GLuint _tId = 0; /* texture pour les carrés */
 
 /* OpenGL and GL4D ***********************************************************/
-static int _wW = 800, _wH = 600;
-static GLuint _pId = 0, _pId2; /* id programme GLSL */
-static GLuint _cube1 = 0, _cube2 = 0, _cube3 = 0, _cube = 0;
-static GLfloat _lumPos0[4] = {-15.1, 20.0, 20.7, 1.0};
+static int _wW = 800, _wH = 800;
+static GLuint _pId = 0, _pId2 = 0, _pId3 = 0; /* id programme GLSL */
+static GLuint _cube1 = 0, _cube2 = 0, _cube3 = 0, _cube = 0, _quad = 0,
+              _textTexId = 0;
 
 /* audio *********************************************************************/
 static Sint16 _hauteurs[ECHANTILLONS]; /* résultat de l'analyse FFT */
@@ -68,16 +72,12 @@ static fftw_plan _plan4fftw = NULL;
 /*****************************************************************************/
 
 int main(int argc, char **argv) {
-  if (argc != 2) {
-    fprintf(stderr, "usage: %s <audio_file>\n", argv[0]);
-    return 2;
-  }
   if (!gl4duwCreateWindow(argc, argv, "GL4Dummies", 0, 0, _wW, _wH,
                           GL4DW_RESIZABLE | GL4DW_SHOWN))
     return 1;
 
   assimpInit("models/ALYS_ShapeChange.obj");
-  init(argv[1]);
+  init();
   atexit(quit);
   gl4duwResizeFunc(resize);
   gl4duwDisplayFunc(draw);
@@ -86,13 +86,16 @@ int main(int argc, char **argv) {
 }
 
 /* init de OpenGL */
-static void init(const char *filename) {
+static void init(void) {
   /* shaders *****************************************************************/
   glEnable(GL_DEPTH_TEST);
   glClearColor(0.0824f, 0.0824f, 0.0824f, 0.0f);
-  _pId = gl4duCreateProgram("<vs>shaders/model.vs", "<fs>shaders/squares.fs", NULL);
+  _pId = gl4duCreateProgram("<vs>shaders/model.vs", "<fs>shaders/squares.fs",
+                            NULL);
   _pId2 =
       gl4duCreateProgram("<vs>shaders/model.vs", "<fs>shaders/model.fs", NULL);
+  _pId3 = gl4duCreateProgram("<vs>shaders/credits.vs", "<fs>shaders/credits.fs",
+                             NULL);
   gl4duGenMatrix(GL_FLOAT, "modelViewMatrix");
   gl4duGenMatrix(GL_FLOAT, "projectionMatrix");
   glEnable(GL_CULL_FACE);
@@ -118,7 +121,17 @@ static void init(const char *filename) {
   _plan4fftw = fftw_plan_dft_1d(ECHANTILLONS, _in4fftw, _out4fftw, FFTW_FORWARD,
                                 FFTW_ESTIMATE);
   assert(_plan4fftw);
-  initAudio(filename);
+  initAudio("audio/musique.mp3");
+
+  /* text ********************************************************************/
+  _quad = gl4dgGenQuadf();
+  initText(&_textTexId, "    Modèle 3D :\n"
+                        "Personnage d'ALYS par VoxWave\n"
+                        "Modèle 3D d'ALYS par YoiStyle\n"
+                        "\n    Musique :\n"
+                        "\"Squares\" par apol-P\n"
+                        "\n    Animation OpenGL :\n"
+                        "Lucien Cartier");
 }
 
 static void loadTexture(GLuint id, const char *filename) {
@@ -140,6 +153,56 @@ static void loadTexture(GLuint id, const char *filename) {
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE,
                  NULL);
   }
+}
+
+static void initText(GLuint *ptId, const char *text) {
+  static int firstTime = 1;
+  SDL_Color c = {245, 245, 245, 255};
+  SDL_Surface *d, *s;
+  TTF_Font *font = NULL;
+  if (firstTime) {
+    /* initialisation de la bibliothèque SDL2 ttf */
+    if (TTF_Init() == -1) {
+      fprintf(stderr, "TTF_Init: %s\n", TTF_GetError());
+      exit(2);
+    }
+    firstTime = 0;
+  }
+  if (*ptId == 0) {
+    /* initialisation de la texture côté OpenGL */
+    glGenTextures(1, ptId);
+    glBindTexture(GL_TEXTURE_2D, *ptId);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+  }
+  /* chargement de la font */
+  if (!(font = TTF_OpenFont("DejaVuSans-Bold.ttf", 128))) {
+    fprintf(stderr, "TTF_OpenFont: %s\n", TTF_GetError());
+    return;
+  }
+  /* création d'une surface SDL avec le texte */
+  d = TTF_RenderUTF8_Blended_Wrapped(font, text, c, 2048);
+  if (d == NULL) {
+    TTF_CloseFont(font);
+    fprintf(stderr, "Erreur lors du TTF_RenderText\n");
+    return;
+  }
+  /* copie de la surface SDL vers une seconde aux spécifications qui
+   * correspondent au format OpenGL */
+  s = SDL_CreateRGBSurface(0, d->w, d->h, 32, R_MASK, G_MASK, B_MASK, A_MASK);
+  assert(s);
+  SDL_BlitSurface(d, NULL, s, NULL);
+  SDL_FreeSurface(d);
+  /* transfert vers la texture OpenGL */
+  glBindTexture(GL_TEXTURE_2D, *ptId);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, s->w, s->h, 0, GL_RGBA,
+               GL_UNSIGNED_BYTE, s->pixels);
+  fprintf(stderr, "Dimensions de la texture : %d %d\n", s->w, s->h);
+  SDL_FreeSurface(s);
+  TTF_CloseFont(font);
+  glBindTexture(GL_TEXTURE_2D, 0);
 }
 
 static void initAudio(const char *filename) {
@@ -290,14 +353,43 @@ static void draw(void) {
   gl4duPopMatrix();
   gl4dgDraw(_cube);
 
+  gl4dfBlur(0, 0, (int)basses / 20, 1, 0, GL_FALSE);
   gl4duTranslatef(-0.7f, -20, -8);
   gl4duScalef(70, 70, 70);
-  gl4duRotatef(180, 0, 1, 0);
 
-  gl4dfSobelSetMixMode(GL4DF_SOBEL_MIX_MULT);
-  gl4dfSobel(0, 0, GL_FALSE);
-  gl4dfBlur(0, 0, (int)basses / 20, 1, 0, GL_FALSE);
   gl4duSendMatrices();
+
+  /* credits *****************************************************************/
+
+  const GLfloat inclinaison = -6.0;
+  static GLfloat t0 = -1;
+  GLfloat t, d, time;
+  time = SDL_GetTicks();
+
+  if (t0 < 0.0f)
+    t0 = SDL_GetTicks();
+  if(time <= END_CREDITS) {
+    glUseProgram(_pId3);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glDisable(GL_CULL_FACE);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, _textTexId);
+    glUniform1i(glGetUniformLocation(_pId3, "inv"), 1);
+    glUniform1i(glGetUniformLocation(_pId3, "tex"), 0);
+    glUniform1f(glGetUniformLocation(_pId3, "alpha"),
+                1.0f - fabsf(cos((time / 14800.0) * M_PI)));
+    gl4duBindMatrix("modelViewMatrix");
+    gl4duLoadIdentityf();
+    gl4duPushMatrix();
+    {
+      gl4duTranslatef(-0.4, 0.4, -3);
+      gl4duSendMatrices();
+    }
+    gl4duPopMatrix();
+    gl4dgDraw(_quad);
+    glUseProgram(0);
+  }
 
   /* ALYS ********************************************************************/
 
@@ -306,13 +398,19 @@ static void draw(void) {
   glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
   glUniform4fv(glGetUniformLocation(_pId2, "lumpos"), 1, lum);
   glEnable(GL_CULL_FACE);
-  assimpDrawScene();
+  gl4duPushMatrix();
+  {
+
+    gl4duSendMatrices();
+  }
+  gl4duPopMatrix();
+  gl4duRotatef(180, 0, 1, 0);
+  if(time > END_CREDITS)
+    assimpDrawScene();
   gl4duSendMatrices();
 
-
-  /* xz += 2; */
-  /* y += 0.4; */
-  ++rot_camera;
+  xz += 2;
+  rot_camera += 0.3;
   mod_shift += 0.07;
 }
 
@@ -336,6 +434,10 @@ static void quit(void) {
   if (_out4fftw) {
     fftw_free(_out4fftw);
     _out4fftw = NULL;
+  }
+  if (_textTexId) {
+    glDeleteTextures(1, &_textTexId);
+    _textTexId = 0;
   }
   assimpQuit();
   gl4duClean(GL4DU_ALL);
