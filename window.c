@@ -19,6 +19,7 @@
 #define LIMIT_BASS 10
 #define LIMIT_HIGH 500
 #define END_CREDITS 14700.0
+#define END_MUSIC 302000.0
 
 /*****************************************************************************/
 /*                                 functions                                 */
@@ -90,8 +91,8 @@ static void init(void) {
   /* shaders *****************************************************************/
   glEnable(GL_DEPTH_TEST);
   glClearColor(0.0824f, 0.0824f, 0.0824f, 0.0f);
-  _pId = gl4duCreateProgram("<vs>shaders/model.vs", "<fs>shaders/squares.fs",
-                            NULL);
+  _pId =
+      gl4duCreateProgram("<vs>shaders/model.vs", "<fs>shaders/model.fs", NULL);
   _pId2 =
       gl4duCreateProgram("<vs>shaders/model.vs", "<fs>shaders/model.fs", NULL);
   _pId3 = gl4duCreateProgram("<vs>shaders/credits.vs", "<fs>shaders/credits.fs",
@@ -125,12 +126,12 @@ static void init(void) {
 
   /* text ********************************************************************/
   _quad = gl4dgGenQuadf();
-  initText(&_textTexId, "    Modèle 3D :\n"
+  initText(&_textTexId, "        Modèle 3D :\n"
                         "Personnage d'ALYS par VoxWave\n"
                         "Modèle 3D d'ALYS par YoiStyle\n"
-                        "\n    Musique :\n"
+                        "\n      Musique :\n"
                         "\"Squares\" par apol-P\n"
-                        "\n    Animation OpenGL :\n"
+                        "\n      Animation OpenGL :\n"
                         "Lucien Cartier");
 }
 
@@ -257,33 +258,42 @@ static void resize(int w, int h) {
 }
 
 static void draw(void) {
+
   static GLfloat xz = 0, y = 0, shiftx = 0, shifty = 0, shiftz = 0,
                  rot_camera = 0, mod_shift = 0;
-  static Sint16 basses = 0, high = 0, volume = 0;
+  static GLfloat basses = 0, high = 0, volume = 0;
   const float shift_coef = 0.02f;
   GLfloat lum[4] = {0.0, 0.0, 5.0, 1.0};
+  static GLfloat t0 = -1;
+  GLfloat t, d, time;
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+  time = SDL_GetTicks();
 
   /***************************************************************************/
   /*                              analyse audio                              */
   /***************************************************************************/
 
   for (int i = 0; i < ECHANTILLONS; ++i) {
-    volume += _hauteurs[i];
+    volume += (float)_hauteurs[i];
   }
-  volume /= ECHANTILLONS;
+  volume /= (float)ECHANTILLONS;
+  printf("time %f\tvolume %f\n", time, volume);
+
+  if(time > END_CREDITS && volume == 0.0)
+    exit(0);
 
   for (int i = 0; i < LIMIT_BASS; ++i) {
-    basses += _hauteurs[i];
+    basses += (float)_hauteurs[i];
   }
-  basses /= LIMIT_BASS;
+  basses /= (float)LIMIT_BASS;
   xz += basses * 0.05;
   y += basses * 0.1;
 
   for (int i = LIMIT_HIGH; i < ECHANTILLONS; ++i) {
-    high += _hauteurs[i];
+    high += (float)_hauteurs[i];
   }
-  high /= (ECHANTILLONS - LIMIT_HIGH);
+  high /= (float)(ECHANTILLONS - LIMIT_HIGH);
 
   /***************************************************************************/
   /*                                    3D                                   */
@@ -302,7 +312,6 @@ static void draw(void) {
   glBindTexture(GL_TEXTURE_2D, _tId);
   glDisable(GL_BLEND);
   glUniform1i(glGetUniformLocation(_pId, "tex"), 0);
-  glUniform1f(glGetUniformLocation(_pId, "basses"), basses);
 
   gl4duBindMatrix("modelViewMatrix");
   gl4duLoadIdentityf();
@@ -360,12 +369,6 @@ static void draw(void) {
   gl4duSendMatrices();
 
   /* credits *****************************************************************/
-
-  const GLfloat inclinaison = -6.0;
-  static GLfloat t0 = -1;
-  GLfloat t, d, time;
-  time = SDL_GetTicks();
-
   if (t0 < 0.0f)
     t0 = SDL_GetTicks();
   if(time <= END_CREDITS) {
@@ -384,6 +387,7 @@ static void draw(void) {
     gl4duPushMatrix();
     {
       gl4duTranslatef(-0.4, 0.4, -3);
+      gl4duScalef(1.0f, 1.0f, 1.0f);
       gl4duSendMatrices();
     }
     gl4duPopMatrix();
